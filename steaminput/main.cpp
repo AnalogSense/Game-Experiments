@@ -248,6 +248,14 @@ extern "C"
 	static FARPROC og_SteamAPI_UnregisterCallResult; export void SteamAPI_UnregisterCallResult() { og_SteamAPI_UnregisterCallResult(); }
 	static FARPROC og_SteamAPI_Init; export void SteamAPI_Init() { og_SteamAPI_Init(); }
 	static FARPROC og_SteamAPI_Shutdown; export void SteamAPI_Shutdown() { og_SteamAPI_Shutdown(); }
+	static FARPROC og_SteamAPI_RestartAppIfNecessary; export void SteamAPI_RestartAppIfNecessary() { og_SteamAPI_RestartAppIfNecessary(); }
+	static FARPROC og_SteamAPI_GetHSteamPipe; export void SteamAPI_GetHSteamPipe() { og_SteamAPI_GetHSteamPipe(); }
+	static FARPROC og_SteamGameServer_Shutdown; export void SteamGameServer_Shutdown() { og_SteamGameServer_Shutdown(); }
+	static FARPROC og_SteamGameServer_RunCallbacks; export void SteamGameServer_RunCallbacks() { og_SteamGameServer_RunCallbacks(); }
+	static FARPROC og_SteamGameServer_GetHSteamPipe; export void SteamGameServer_GetHSteamPipe() { og_SteamGameServer_GetHSteamPipe(); }
+	static FARPROC og_SteamGameServer_GetHSteamUser; export void SteamGameServer_GetHSteamUser() { og_SteamGameServer_GetHSteamUser(); }
+	static FARPROC og_SteamInternal_GameServer_Init; export void SteamInternal_GameServer_Init() { og_SteamInternal_GameServer_Init(); }
+	static FARPROC og_SteamAPI_GetSteamInstallPath; export void SteamAPI_GetSteamInstallPath() { og_SteamAPI_GetSteamInstallPath(); }
 }
 
 static HMODULE og_lib;
@@ -292,6 +300,14 @@ BOOL APIENTRY DllMain(HMODULE hInstance, DWORD reason, LPVOID lpReserved)
 		og_SteamAPI_UnregisterCallResult = GetProcAddress(og_lib, "SteamAPI_UnregisterCallResult");
 		og_SteamAPI_Init = GetProcAddress(og_lib, "SteamAPI_Init");
 		og_SteamAPI_Shutdown = GetProcAddress(og_lib, "SteamAPI_Shutdown");
+		og_SteamAPI_RestartAppIfNecessary = GetProcAddress(og_lib, "SteamAPI_RestartAppIfNecessary");
+		og_SteamAPI_GetHSteamPipe = GetProcAddress(og_lib, "SteamAPI_GetHSteamPipe");
+		og_SteamGameServer_Shutdown = GetProcAddress(og_lib, "SteamGameServer_Shutdown");
+		og_SteamGameServer_RunCallbacks = GetProcAddress(og_lib, "SteamGameServer_RunCallbacks");
+		og_SteamGameServer_GetHSteamPipe = GetProcAddress(og_lib, "SteamGameServer_GetHSteamPipe");
+		og_SteamGameServer_GetHSteamUser = GetProcAddress(og_lib, "SteamGameServer_GetHSteamUser");
+		og_SteamInternal_GameServer_Init = GetProcAddress(og_lib, "SteamInternal_GameServer_Init");
+		og_SteamAPI_GetSteamInstallPath = GetProcAddress(og_lib, "SteamAPI_GetSteamInstallPath");
 		wooting_lib = LoadLibraryA("wooting_analog_sdk");
 		if (!wooting_lib)
 		{
