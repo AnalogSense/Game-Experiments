@@ -97,10 +97,46 @@ struct InputAnalogActionData_t
 	// Whether or not this action is currently available to be bound in the active action set
 	bool bActive;
 };
+
+struct InputDigitalActionData_t
+{
+	// The current state of this action; will be true if currently pressed
+	bool bState;
+	
+	// Whether or not this action is currently available to be bound in the active action set
+	bool bActive;
+};
 #pragma pack(pop)
 
 using InputHandle_t = uint64_t;
+using InputDigitalActionHandle_t = uint64_t;
 using InputAnalogActionHandle_t = uint64_t;
+
+static InputDigitalActionHandle_t dhCrouch = -1;
+
+using GetDigitalActionHandle_t = InputDigitalActionHandle_t(*)(ISteamInput* _this, const char* pszActionName);
+static GetDigitalActionHandle_t og_GetDigitalActionHandle;
+static InputDigitalActionHandle_t GetDigitalActionHandle_detour(ISteamInput* _this, const char* pszActionName)
+{
+	auto ret = og_GetDigitalActionHandle(_this, pszActionName);
+	std::cout << "Digital action '" << pszActionName << "' got handle " << ret << "\n";
+	if (strcmp(pszActionName, "crouch") == 0)
+	{
+		dhCrouch = ret;
+	}
+	return ret;
+}
+
+using GetDigitalActionData_t = void(*)(ISteamInput* _this, InputDigitalActionData_t* out, InputHandle_t inputHandle, InputDigitalActionHandle_t digitalActionHandle);
+static GetDigitalActionData_t og_GetDigitalActionData;
+static void GetDigitalActionData_detour(ISteamInput* _this, InputDigitalActionData_t* out, InputHandle_t inputHandle, InputDigitalActionHandle_t digitalActionHandle)
+{
+	og_GetDigitalActionData(_this, out, inputHandle, digitalActionHandle);
+	if (digitalActionHandle == dhCrouch)
+	{
+		out->bState = (GetAsyncKeyState(VK_CONTROL) & 0x8000);
+	}
+}
 
 static InputAnalogActionHandle_t ahMove = -1;
 static InputAnalogActionHandle_t ahThrottle = -1;
@@ -153,11 +189,11 @@ static HWND g_hwnd{};
 static WNDPROC og_wndproc;
 static LRESULT CALLBACK WndProc_detour(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
-	if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN)
+	if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN || msg == WM_CHAR || msg == WM_KEYUP || msg == WM_SYSKEYUP)
 	{
 		const UINT scancode = ((lparam >> 16) & 0b11111111);
 		unsigned int vk = MapVirtualKeyExA(scancode, MAPVK_VSC_TO_VK, GetKeyboardLayout(0));
-		if (vk == 'W' || vk == 'A' || vk == 'S' || vk == 'D')
+		if (vk == 'W' || vk == 'A' || vk == 'S' || vk == 'D' || vk == VK_CONTROL)
 		{
 			return 0;
 		}
@@ -185,6 +221,10 @@ extern "C"
 		{
 			g_hwnd = GetForegroundWindow();
 
+			og_GetDigitalActionHandle = (GetDigitalActionHandle_t)reinterpret_cast<ISteamInput*>(ret)->vtbl->GetDigitalActionHandle;
+			do_vtbl_hook(&reinterpret_cast<ISteamInput*>(ret)->vtbl->GetDigitalActionHandle, (void*)&GetDigitalActionHandle_detour);
+			og_GetDigitalActionData = (GetDigitalActionData_t)reinterpret_cast<ISteamInput*>(ret)->vtbl->GetDigitalActionData;
+			do_vtbl_hook(&reinterpret_cast<ISteamInput*>(ret)->vtbl->GetDigitalActionData, (void*)&GetDigitalActionData_detour);
 			og_GetAnalogActionHandle = (GetAnalogActionHandle_t)reinterpret_cast<ISteamInput*>(ret)->vtbl->GetAnalogActionHandle;
 			do_vtbl_hook(&reinterpret_cast<ISteamInput*>(ret)->vtbl->GetAnalogActionHandle, (void*)&GetAnalogActionHandle_detour);
 			og_GetAnalogActionData = (GetAnalogActionData_t)reinterpret_cast<ISteamInput*>(ret)->vtbl->GetAnalogActionData;
