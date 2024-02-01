@@ -1,0 +1,5 @@
++*.cpp
+dynamic
+name steam_api64
+
+arg -O3
