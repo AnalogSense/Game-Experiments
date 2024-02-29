@@ -77,9 +77,9 @@ static bool fib_ret;
 	{
 		prev_focus_pid = focus_pid;
 		proc = Process::get(focus_pid);
-		if (isAppropriateGameProcess(proc->name))
+		if (proc && isAppropriateGameProcess(proc->name))
 		{
-			mod = proc->open();;
+			mod = proc->open();
 			std::cout << "Appropriate game process detected: " << proc->name << "\n";
 		}
 		else
