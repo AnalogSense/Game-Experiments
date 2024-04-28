@@ -1,14 +1,16 @@
 #include <iostream>
 #include <thread>
 
+#include <AssemblyBuilder.hpp>
+#include <AllocRaiiRemote.hpp>
 #include <DelayedCtor.hpp>
 #include <Fiber.hpp>
 #include <joaat.hpp>
 #include <kbRgbWooting.hpp>
-#include <Module.hpp>
 #include <Pattern.hpp>
 #include <Pointer.hpp>
 #include <Process.hpp>
+#include <ProcessHandle.hpp>
 #include <Window.hpp>
 #include <wooting_enums.hpp>
 
@@ -16,11 +18,15 @@ using namespace soup;
 
 static DWORD prev_focus_pid = -1;
 static UniquePtr<Process> proc;
-static std::shared_ptr<Module> mod;
+static std::shared_ptr<ProcessHandle> h;
 static DelayedCtor<Fiber> fib;
 static bool fib_ret;
 
-#define YIELD_VALUE(x) fib_ret = x; Fiber::current()->yield();
+static void YIELD_VALUE(bool x)
+{
+	fib_ret = x;
+	Fiber::current()->yield();
+}
 
 [[nodiscard]] static bool isAppropriateGameProcess(const std::string& name)
 {
@@ -41,22 +47,59 @@ static bool fib_ret;
 		{
 			fib.construct([](Capture&&)
 			{
-				auto func = mod->externalScan(Pattern("48 89 5C 24 10 4C 89 74 24 18 48 89 4C 24 08 55"));
-				auto player_info = func.add((0x0000000140F886F9 - 0x0000000140F88678) + 3).externalRip(*mod);
+				Pointer pMountingFacility;
+				for (; !pMountingFacility; YIELD_VALUE(false))
+				{
+					Pointer pGameEngine = h->externalRead<void*>(h->externalScan(Pattern("48 8B 0D ? ? ? ? BA BE FF FF FF")).add(3).externalRip(*h));
+					Pointer pGameFramework = h->externalRead<void*>(pGameEngine.add(0x308));
+					Pointer pGameInstance = h->externalRead<void*>(pGameFramework.add(0x10));
+					if (!pGameInstance)
+					{
+						continue;
+					}
+					Pointer pGameInstance_vft = h->externalRead<void*>(pGameInstance);
+					Pointer pGameInstance_QuerySystem = h->externalRead<void*>(pGameInstance_vft.add(8));
+					Pointer pMountingFacilityClassDesc = h->externalRead<void*>(h->externalScan(Pattern("48 8B 15 ? ? ? ? 48 89 5D 98 48 89 45 90 48 8B 01 FF 50 08")).add(3).externalRip(*h)); // Pattern is in PhotoModeSystem::InitializePhotoModeContext, found via "BaseStatusEffect.CyberspacePresence"
+
+					auto retvalarea = h->allocate(8);
+					AssemblyBuilder ab;
+
+					ab.funcBegin();
+
+					// RAX = pGameInstance_QuerySystem(pGameInstance, pMountingFacilityClassDesc)
+					ab.setA(pGameInstance_QuerySystem.as<uintptr_t>());
+					ab.setC(pGameInstance.as<uintptr_t>());
+					ab.setD(pMountingFacilityClassDesc.as<uintptr_t>());
+					ab.callA();
+
+					// *retvalarea->p = RAX
+					ab.setC(retvalarea->p.as<uintptr_t>());
+					ab.setU64fromCtoA();
+
+					ab.funcEnd();
+
+					auto remote_bytecode = h->copyInto(ab.data(), ab.size());
+					h->executeSync(remote_bytecode->p.as<void*>(), 0xDEADDEADDEADDEAD);
+
+					pMountingFacility = h->externalRead<void*>(retvalarea->p);
+				}
+
+				Pointer pChildIds = pMountingFacility.add(0x60);
+				Pointer pChildIds_size = pMountingFacility.add(0x6C);
 				while (true)
 				{
-					if (Pointer player_ptr = mod->externalRead<void*>(player_info.add(0x10)))
+					Pointer pChildIdsArr = h->externalRead<void*>(pChildIds);
+					constexpr uint64_t PLAYER_PED_ID = 1;
+					bool player_is_mount_child = false;
+					for (uint32_t i = 0; i != h->externalRead<uint32_t>(pChildIds_size); ++i)
 					{
-						if (Pointer player_ped_ptr = mod->externalRead<void*>(player_ptr.add(0x5B0)))
+						if (h->externalRead<uint64_t>(pChildIdsArr.add(i * 8)) == PLAYER_PED_ID)
 						{
-							if (Pointer vehicle_ptr = mod->externalRead<void*>(player_ped_ptr.add(0x90)))
-							{
-								YIELD_VALUE(true);
-								continue;
-							}
+							player_is_mount_child = true;
+							break;
 						}
 					}
-					YIELD_VALUE(false);
+					YIELD_VALUE(player_is_mount_child);
 				}
 			});
 		}
@@ -79,21 +122,21 @@ static bool fib_ret;
 		proc = Process::get(focus_pid);
 		if (proc && isAppropriateGameProcess(proc->name))
 		{
-			mod = proc->open();
+			h = proc->open();
 			std::cout << "Appropriate game process detected: " << proc->name << "\n";
 		}
 		else
 		{
-			if (mod)
+			if (h)
 			{
-				mod.reset();
+				h.reset();
 				fib.reset();
 				std::cout << "Game process no longer active/focused\n";
 			}
 		}
 	}
 
-	if (mod)
+	if (h)
 	{
 		if (isInVehicleContext())
 		{
